@@ -16,6 +16,12 @@ unsigned int j=0; /*FND select pin index */
 unsigned int num, d1, d10, d100, d1000 =0;
 /*num is Counting value, num0 is '1', num2 is '10', num2 is '100', num3 is '1000'*/
 
+//interrupt
+unsigned int External_PIN=0; /* External_PIN:SW External input Assignment */
+
+//lcd
+unsigned int i = 0;
+
 
 void PORT_init(void) 
 {
@@ -82,6 +88,14 @@ void PORT_init(void)
 	PORTC->PCR[15]  = PORT_PCR_MUX(1);	/* Port C15: MUX = GPIO  */
 
     /*=====================PORT-B 일단아무거나=====================*/
+    //test를 위해 sw5, sw4연결해서 up-down-counter interrupt 구현
+    PCC->PCCn[PCC_PORTB_INDEX]|=PCC_PCCn_CGC_MASK;   /* Enable clock for PORTB */
+    PTB->PDDR &= ~(1<<11);		/* Port B11 Port Input set, value '0'*/
+    PTB->PDDR &= ~(1<<12);      /* Port B12 Port Input set, value '0'*/
+    PORTB->PCR[11] |= PORT_PCR_MUX(1); // Port B11 mux = GPIO
+	PORTB->PCR[11] |=(10<<16); // Port B11 IRQC : interrupt on Falling-edge
+    PORTB->PCR[12] |= PORT_PCR_MUX(1); // Port B12 mux = GPIO
+	PORTB->PCR[12] |=(10<<16); // Port B12 IRQC : interrupt on Falling-edge
 
 
 }
@@ -131,6 +145,41 @@ void delay_us (volatile int us){
                lpit0_ch0_flag_counter++;         /* Increment LPIT0 timeout counter */
                LPIT0->MSR |= LPIT_MSR_TIF0_MASK; /* Clear LPIT0 timer flag 0 */
 }
+
+//port B 인터럽트
+void NVIC_init_IRQs(void){
+	S32_NVIC->ICPR[1] |= 1<<(60%32); // Clear any pending IRQ60
+	S32_NVIC->ISER[1] |= 1<<(60%32); // Enable IRQ60
+	S32_NVIC->IP[60] =0xB; //Priority 11 of 15
+}
+
+void PORTB_IRQHandler(void){
+	//PORTB_Interrupt State Flag Register Read
+	if((PORTB->ISFR & (1<<11)) != 0){
+		External_PIN=1;
+	}
+	else if((PORTB->ISFR & (1<<12)) != 0){
+		External_PIN=2;
+	}
+
+	// External input Check Behavior Assignment
+	switch (External_PIN){
+		case 1:
+			num += 1;
+			External_PIN=0;
+			break;
+		case 2:
+			num -= 1;
+		  External_PIN=0;
+			break;
+		default:
+			break;
+	}
+
+	PORTB->PCR[11] |= 0x01000000; // Port Control Register ISF bit '1' set
+	PORTB->PCR[12] |= 0x01000000; // Port Control Register ISF bit '1' set
+}
+
 
 //keypad
 int KeyScan(void){
@@ -207,9 +256,8 @@ void seg_out(int number){
 	j=0;
 }
 
-//인터럽트
-
-
+//main 함수
+/*
 int main(void)
 {
 
@@ -220,3 +268,65 @@ int main(void)
 
     return 0;
 }
+*/
+//board 테스트용 코드 (결선확인 위한 코드) : 평소에는 주석처리
+//test할 때만 기존 main 주석처리하고 아래의 main 사용
+///*
+int main(void)
+{
+    WDOG_disable();/* Disable Watchdog in case it is not done in startup code */
+	PORT_init();            /* Configure ports */
+	SOSC_init_8MHz();        /* Initialize system oscilator for 8 MHz xtal */
+	SPLL_init_160MHz();     /* Initialize SPLL to 160 MHz with 8 MHz SOSC */
+	NormalRUNmode_80MHz();  /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
+    SystemCoreClockUpdate();
+    delay_us(20000);
+	NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
+
+    int num = 0;
+
+    char msg_array1[15] = {0x55, 0x50, 0x2D, 0x44, 0x4F, 0x57, 0x4E, 0x20, 0x43, 0x4F, 0x55, 0x4E, 0x54, 0x45, 0x52};
+    //UP-DOWN COUNTER
+    char msg_array2[16] = {0x53, 0x57, 0x35, 0x2D, 0x55, 0x50, 0x2C, 0x20, 0x53, 0x57, 0x34, 0x2D, 0x44, 0x4F, 0x57, 0x4E};
+    //SW5-UP, SW4-DOWN
+    
+    lcdinit();        /* Initialize LCD1602A module*/
+	delay_us(200000);
+
+	//text-char output
+	while(msg_array1[i] != '\0')
+    {
+		lcdcharinput(msg_array1[i]); // 1(first) row text-char send to LCD module
+		delay_us(800000);
+		i++;
+	}
+
+	lcdinput(0x80+0x40);// second row
+	delay_us(200000);
+	i=0;
+	while(msg_array2[i] != '\0')
+    {
+		lcdcharinput(msg_array2[i]);// 2(second) row text-char send to LCD module
+		delay_us(800000);
+		i++;
+	}
+
+
+    while (1) 
+    {
+        //up-down counter by interrupt
+        seg_out(num);
+    }
+
+
+/*
+    //Lcd off, LCD display clear
+	delay_ms(2000);
+	lcdinput(0x08);	//lcd display off
+	delay_ms(400);
+	lcdinput(0x01);	//Clear display
+	delay_ms(200);
+*/
+    return 0;
+}
+//*/
