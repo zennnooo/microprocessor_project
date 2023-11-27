@@ -281,9 +281,6 @@ int main(void)
 	NormalRUNmode_80MHz();  /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
     SystemCoreClockUpdate();
     delay_us(20000);
-	NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
-
-    int num = 0;
 
     char msg_array1[15] = {0x55, 0x50, 0x2D, 0x44, 0x4F, 0x57, 0x4E, 0x20, 0x43, 0x4F, 0x55, 0x4E, 0x54, 0x45, 0x52};
     //UP-DOWN COUNTER
@@ -311,6 +308,9 @@ int main(void)
 		i++;
 	}
 
+
+    NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
+    int num = 0;
 
     while (1) 
     {
