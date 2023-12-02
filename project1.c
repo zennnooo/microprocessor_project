@@ -262,6 +262,7 @@ void seg_out(int number){
 	j=0;
 }
 
+//특정 범위안에서 random key 생성
 int crand(int min, int max)
 {
 	return min + rand() % (max - min + 1);
@@ -323,26 +324,38 @@ int main(void)
 
     num = 0000;
     int key=0, pre_key = 100;
-
-    int rand_key = 0;
-    //rand_key = crand(1,10);
     int output_num = 0;
 
-    int cnt = 0;
+    //중복이 제거된 random key
+	int rand_key = 0;
+	int pre_rand = 100;
+	int cnt = 0;
 
-    //집에서 중복제거 키 만들기
-    int rand_arr[10];
-    for (int n = 0; n < 10; n++) {
-    	do {
-    		rand_key = crand(1,10);
-    	} while (rand_key == pre_key);
+    int rand_arr[500];
+    for (;;) 
+    {
+        if (cnt == 100) {
+            break;
+        }
 
-    	rand_arr[n] = rand_key;
+        rand_key = crand(1,10);
+        if (rand_key != pre_rand) {
+            rand_arr[cnt++] = rand_key;
+            pre_rand = rand_key;
+        }
+        else {
+            continue;
+        }
     }
 
-    printf("answer : ");
-    for (int n = 0; n < 10; n++) {
-    	printf("%d ", rand_arr[n]);
+    printf("rand_arr : \n");
+    for (int n = 0; n < 100; n++) {
+        if (n % 10 == 9) {
+            printf("%d\n", rand_arr[n]);
+        }
+        else {
+            printf("%d ", rand_arr[n]);
+        }
     }
 
     int k = 0;

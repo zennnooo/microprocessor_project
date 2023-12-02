@@ -6,3 +6,10 @@ clocks_and_modes.h
 lcd1602A.c
 lcd1602A.h
 math.h
+
+
+#test code
+
+#1. random
+random_test.c
+rand
