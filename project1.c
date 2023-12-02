@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "S32K144.h"
 #include "device_registers.h"
 #include "clocks_and_modes.h"
@@ -23,7 +24,7 @@ unsigned int External_PIN=0; /* External_PIN:SW External input Assignment */
 unsigned int i = 0;
 
 
-void PORT_init(void) 
+void PORT_init(void)
 {
     //사용할 port에 따라서 각각 선언해주기
 
@@ -69,26 +70,28 @@ void PORT_init(void)
     PORTD->PCR[15]= PORT_PCR_MUX(1);
     //Output set(set 4bit, 2line - 0b 0010 0101 000x xxxx)
 
+
     /*=====================PORT-C KEYPAD=====================*/
-	PCC-> PCCn[PCC_PORTC_INDEX] = PCC_PCCn_CGC_MASK; /* Enable clock for PORT C */
+    //1 - c13, 2 - c8, 3 - c12, 4 - c3, 5 - c15, 6 - c2, 7 - c9
+    PCC-> PCCn[PCC_PORTC_INDEX] = PCC_PCCn_CGC_MASK; /* Enable clock for PORT C */
 
-	PTC->PDDR |= 1<<12|1<<14|1<<15;		/* Port C12,C14,C15:  Data Direction = output */
-	PTC->PDDR &= ~(1<<0);   /* Port C0: Data Direction= input (default) */
-	PTC->PDDR &= ~(1<<1);   /* Port C1: Data Direction= input (default) */
-	PTC->PDDR &= ~(1<<2);   /* Port C2: Data Direction= input (default) */
-	PTC->PDDR &= ~(1<<3);   /* Port C3: Data Direction= input (default) */
+    PTC->PDDR |= 1<<12|1<<13|1<<15;		/* Port C12,C14,C15:  Data Direction = output */
+    PTC->PDDR &= ~(1<<8);   /* Port C0: Data Direction= input (default) */ //1st row
+    PTC->PDDR &= ~(1<<9);   /* Port C1: Data Direction= input (default) */ //2nd row
+    PTC->PDDR &= ~(1<<2);   /* Port C2: Data Direction= input (default) */ //3rd row
+    PTC->PDDR &= ~(1<<3);   /* Port C3: Data Direction= input (default) */ //4th row
 
-	PORTC->PCR[0] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C0: MUX = GPIO, input filter enabled */
-	PORTC->PCR[1] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C1: MUX = GPIO, input filter enabled */
-	PORTC->PCR[2] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C2: MUX = GPIO, input filter enabled */
-	PORTC->PCR[3] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C3: MUX = GPIO, input filter enabled */
+    PORTC->PCR[8] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C0: MUX = GPIO, input filter enabled */
+    PORTC->PCR[9] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C1: MUX = GPIO, input filter enabled */
+    PORTC->PCR[2] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C2: MUX = GPIO, input filter enabled */
+    PORTC->PCR[3] = PORT_PCR_MUX(1)|PORT_PCR_PFE_MASK|PORT_PCR_PE(1) | PORT_PCR_PS(0); /* Port C3: MUX = GPIO, input filter enabled */
 
-	PORTC->PCR[12]  = PORT_PCR_MUX(1);	/* Port C12: MUX = GPIO  */
-	PORTC->PCR[14]  = PORT_PCR_MUX(1);	/* Port C14: MUX = GPIO  */
-	PORTC->PCR[15]  = PORT_PCR_MUX(1);	/* Port C15: MUX = GPIO  */
+    PORTC->PCR[12]  = PORT_PCR_MUX(1);	/* Port C12: MUX = GPIO  */ //1st col
+    PORTC->PCR[13]  = PORT_PCR_MUX(1);	/* Port C14: MUX = GPIO  */ //2nd col
+    PORTC->PCR[15]  = PORT_PCR_MUX(1);	/* Port C15: MUX = GPIO  */ //3rd col
 
     /*=====================PORT-B 일단아무거나=====================*/
-    //test를 위해 sw5, sw4연결해서 up-down-counter interrupt 구현
+    //test를 위해 sw5(down - b12), sw4(up - b11)연결해서 up-down-counter interrupt 구현
     PCC->PCCn[PCC_PORTB_INDEX]|=PCC_PCCn_CGC_MASK;   /* Enable clock for PORTB */
     PTB->PDDR &= ~(1<<11);		/* Port B11 Port Input set, value '0'*/
     PTB->PDDR &= ~(1<<12);      /* Port B12 Port Input set, value '0'*/
@@ -97,6 +100,9 @@ void PORT_init(void)
     PORTB->PCR[12] |= PORT_PCR_MUX(1); // Port B12 mux = GPIO
 	PORTB->PCR[12] |=(10<<16); // Port B12 IRQC : interrupt on Falling-edge
 
+	//buzer
+	PTB->PDDR |= 1<<13;
+	PORTB->PCR[13]  = PORT_PCR_MUX(1);
 
 }
 
@@ -170,7 +176,7 @@ void PORTB_IRQHandler(void){
 			break;
 		case 2:
 			num -= 1;
-		  External_PIN=0;
+			External_PIN=0;
 			break;
 		default:
 			break;
@@ -184,28 +190,28 @@ void PORTB_IRQHandler(void){
 //keypad
 int KeyScan(void){
    Dtime = 1000;
-   int Kbuff = 0;
+   int Kbuff = 100;
 
    PTC->PSOR |=1<<12;
    delay_us(Dtime);
-   if(PTC->PDIR &(1<<0))Kbuff=1;      //1
-   if(PTC->PDIR &(1<<1))Kbuff=4;      //4
+   if(PTC->PDIR &(1<<8))Kbuff=1;      //1
+   if(PTC->PDIR &(1<<9))Kbuff=4;      //4
    if(PTC->PDIR &(1<<2))Kbuff=7;      //7
    if(PTC->PDIR &(1<<3))Kbuff=11;     //*
    PTC->PCOR |=1<<12;
 
-   PTC->PSOR |=1<<14;
+   PTC->PSOR |=1<<13;
    delay_us(Dtime);
-   if(PTC->PDIR & (1<<0))Kbuff=2;      //2
-   if(PTC->PDIR & (1<<1))Kbuff=5;      //5
+   if(PTC->PDIR & (1<<8))Kbuff=2;      //2
+   if(PTC->PDIR & (1<<9))Kbuff=5;      //5
    if(PTC->PDIR & (1<<2))Kbuff=8;      //8
    if(PTC->PDIR & (1<<3))Kbuff=0;      //0
-   PTC->PCOR |=1<<14;
+   PTC->PCOR |=1<<13;
 
    PTC->PSOR |=1<<15;
    delay_us(Dtime);
-   if(PTC->PDIR & (1<<0))Kbuff=3;      //3
-   if(PTC->PDIR & (1<<1))Kbuff=6;      //6
+   if(PTC->PDIR & (1<<8))Kbuff=3;      //3
+   if(PTC->PDIR & (1<<9))Kbuff=6;      //6
    if(PTC->PDIR & (1<<2))Kbuff=9;      //9
    if(PTC->PDIR & (1<<3))Kbuff=12;     //#
    PTC->PCOR |=1<<15;
@@ -224,37 +230,43 @@ void seg_out(int number){
 	d1 = number%10;
 
 	// 1000자리수 출력
-	PTD->PSOR = FND_SEL[j];
-	PTD->PCOR =0x7f;
-	PTD->PSOR = FND_DATA[d1000];
+	PTE->PSOR = FND_SEL[j];
+	PTE->PCOR =0x7f;
+	PTE->PSOR = FND_DATA[d1000];
     delay_us(Dtime);
-	PTD->PCOR = 0xfff;
+	PTE->PCOR = 0xfff;
 	j++;
 
 	// 100자리수 출력
-	PTD->PSOR = FND_SEL[j];
-	PTD->PCOR =0x7f;
-	PTD->PSOR = FND_DATA[d100];
+	PTE->PSOR = FND_SEL[j];
+	PTE->PCOR =0x7f;
+	PTE->PSOR = FND_DATA[d100];
     delay_us(Dtime);
-	PTD->PCOR = 0xfff;
+	PTE->PCOR = 0xfff;
 	j++;
 
 	// 10자리수 출력
-	PTD->PSOR = FND_SEL[j];
-	PTD->PCOR =0x7f;
-	PTD->PSOR = FND_DATA[d10];
+	PTE->PSOR = FND_SEL[j];
+	PTE->PCOR =0x7f;
+	PTE->PSOR = FND_DATA[d10];
     delay_us(Dtime);
-    PTD->PCOR = 0xfff;
+    PTE->PCOR = 0xfff;
 	j++;
 
 	// 1자리수 출력
-	PTD->PSOR = FND_SEL[j];
-	PTD->PCOR =0x7f;
-	PTD->PSOR = FND_DATA[d1];
+	PTE->PSOR = FND_SEL[j];
+	PTE->PCOR =0x7f;
+	PTE->PSOR = FND_DATA[d1];
     delay_us(Dtime);
-	PTD->PCOR = 0xfff;
+	PTE->PCOR = 0xfff;
 	j=0;
 }
+
+int crand(int min, int max)
+{
+	return min + rand() % (max - min + 1);
+}
+
 
 //main 함수
 /*
@@ -279,54 +291,99 @@ int main(void)
 	SOSC_init_8MHz();        /* Initialize system oscilator for 8 MHz xtal */
 	SPLL_init_160MHz();     /* Initialize SPLL to 160 MHz with 8 MHz SOSC */
 	NormalRUNmode_80MHz();  /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
+	NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
     SystemCoreClockUpdate();
     delay_us(20000);
 
     char msg_array1[15] = {0x55, 0x50, 0x2D, 0x44, 0x4F, 0x57, 0x4E, 0x20, 0x43, 0x4F, 0x55, 0x4E, 0x54, 0x45, 0x52};
     //UP-DOWN COUNTER
-    char msg_array2[16] = {0x53, 0x57, 0x35, 0x2D, 0x55, 0x50, 0x2C, 0x20, 0x53, 0x57, 0x34, 0x2D, 0x44, 0x4F, 0x57, 0x4E};
+    char msg_array2[16] = {0x53, 0x57, 0x34, 0x2D, 0x55, 0x50, 0x2C, 0x20, 0x53, 0x57, 0x35, 0x2D, 0x44, 0x4F, 0x57, 0x4E};
     //SW5-UP, SW4-DOWN
-    
+
     lcdinit();        /* Initialize LCD1602A module*/
-	delay_us(200000);
+	delay_us(20000);
 
 	//text-char output
 	while(msg_array1[i] != '\0')
     {
 		lcdcharinput(msg_array1[i]); // 1(first) row text-char send to LCD module
-		delay_us(800000);
+		delay_us(80000);
 		i++;
 	}
 
 	lcdinput(0x80+0x40);// second row
-	delay_us(200000);
+	delay_us(20000);
 	i=0;
 	while(msg_array2[i] != '\0')
     {
 		lcdcharinput(msg_array2[i]);// 2(second) row text-char send to LCD module
-		delay_us(800000);
+		delay_us(80000);
 		i++;
 	}
 
+    num = 0000;
+    int key=0, pre_key = 100;
 
-    NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
-    int num = 0;
+    int rand_key = 0;
+    //rand_key = crand(1,10);
+    int output_num = 0;
 
-    while (1) 
-    {
-        //up-down counter by interrupt
-        seg_out(num);
+    int cnt = 0;
+
+    //집에서 중복제거 키 만들기
+    int rand_arr[10];
+    for (int n = 0; n < 10; n++) {
+    	do {
+    		rand_key = crand(1,10);
+    	} while (rand_key == pre_key);
+
+    	rand_arr[n] = rand_key;
     }
 
+    printf("answer : ");
+    for (int n = 0; n < 10; n++) {
+    	printf("%d ", rand_arr[n]);
+    }
 
-/*
+    int k = 0;
+
+    while (1)
+    {
+        /*//up-down counter by interrupt
+    	key=KeyScan();
+        if ((key < 10) & !(pre_key == key)) // Key button push
+        {
+        	output_num = output_num * 10 + key; // output data update
+        	output_num %= 10; // 1자리만 출력
+        }
+        pre_key = key; // 반복 입력 방지를 위한
+    	if (num != output_num)
+    	{
+    		seg_out(num);
+    		PTB-> PCOR |= 1<<13;
+    	}
+    	else
+    	{
+    		PTB-> PSOR |= 1<<13;
+    		seg_out(output_num+1);
+
+    	}*/
+
+
+    	for (int m = 0; m < 10; m++){
+    		for (int n = 0; n < 250; n++) {
+    		    	seg_out(rand_arr[m]);
+    		 }
+    	}
+    }
+
     //Lcd off, LCD display clear
-	delay_ms(2000);
+	delay_us(20000);
 	lcdinput(0x08);	//lcd display off
-	delay_ms(400);
+	delay_us(4000);
 	lcdinput(0x01);	//Clear display
-	delay_ms(200);
-*/
+	delay_us(2000);
+
     return 0;
 }
 //*/
