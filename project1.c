@@ -362,7 +362,8 @@ int main(void)
 	    page = page -1;
 	}
 	
-	if (page ==1)
+    //의도가 애매
+	if (page == 1)
 	{
         delay_us(20000);
 	    lcdinput(0x08);	//lcd display off
@@ -379,7 +380,7 @@ int main(void)
     }
 
 
-	else if(page ==2)
+	else if(page == 2)
 	{
         delay_us(20000);
 	    lcdinput(0x08);	//lcd display off
