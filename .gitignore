@@ -9,6 +9,7 @@ math.h
 
 
 #test code
+project.c
 
 #1. random
 random_test.c

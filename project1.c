@@ -19,6 +19,7 @@ unsigned int num, d1, d10, d100, d1000 =0;
 
 //interrupt
 unsigned int External_PIN=0; /* External_PIN:SW External input Assignment */
+unsigned int page = 0; //인터럽트를 통해 PAGE인식
 
 //lcd
 unsigned int i = 0;
@@ -93,8 +94,14 @@ void PORT_init(void)
     /*=====================PORT-B 일단아무거나=====================*/
     //test를 위해 sw5(down - b12), sw4(up - b11)연결해서 up-down-counter interrupt 구현
     PCC->PCCn[PCC_PORTB_INDEX]|=PCC_PCCn_CGC_MASK;   /* Enable clock for PORTB */
+    //PTB->PDDR &= ~(1<<9);		/* Port B11 Port Input set, value '0'*/
+    //PTB->PDDR &= ~(1<<10);      /* Port B12 Port Input set, value '0'*/
     PTB->PDDR &= ~(1<<11);		/* Port B11 Port Input set, value '0'*/
     PTB->PDDR &= ~(1<<12);      /* Port B12 Port Input set, value '0'*/
+    //PORTB->PCR[9] |= PORT_PCR_MUX(1); // Port B11 mux = GPIO
+    //PORTB->PCR[9] |=(10<<16); // Port B11 IRQC : interrupt on Falling-edge
+    //PORTB->PCR[10] |= PORT_PCR_MUX(1); // Port B12 mux = GPIO
+    //PORTB->PCR[10] |=(10<<16); // Port B12 IRQC : interrupt on Falling-edge
     PORTB->PCR[11] |= PORT_PCR_MUX(1); // Port B11 mux = GPIO
 	PORTB->PCR[11] |=(10<<16); // Port B11 IRQC : interrupt on Falling-edge
     PORTB->PCR[12] |= PORT_PCR_MUX(1); // Port B12 mux = GPIO
@@ -171,17 +178,21 @@ void PORTB_IRQHandler(void){
 	// External input Check Behavior Assignment
 	switch (External_PIN){
 		case 1:
-			num += 1;
+			num = 1;
+			page = 1;
 			External_PIN=0;
 			break;
 		case 2:
-			num -= 1;
+			num = 2;
+			page = 2;
 			External_PIN=0;
 			break;
 		default:
 			break;
 	}
 
+	PORTB->PCR[9] |= 0x01000000; // Port Control Register ISF bit '1' set
+	PORTB->PCR[10] |= 0x01000000; // Port Control Register ISF bit '1' set
 	PORTB->PCR[11] |= 0x01000000; // Port Control Register ISF bit '1' set
 	PORTB->PCR[12] |= 0x01000000; // Port Control Register ISF bit '1' set
 }
@@ -292,18 +303,25 @@ int main(void)
 	SOSC_init_8MHz();        /* Initialize system oscilator for 8 MHz xtal */
 	SPLL_init_160MHz();     /* Initialize SPLL to 160 MHz with 8 MHz SOSC */
 	NormalRUNmode_80MHz();  /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
-	NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
     SystemCoreClockUpdate();
+    ADC_init();
     delay_us(20000);
 
     //여기부터
-    int page =0;
-    char msg_array1[10] = {0x57, 0x65, 0x6C, 0x63, 0x6F, 0x6D, 0x65, 0x20, 0x74, 0x6F}; //Welcome to
-    char msg_array2[14] = {0x43, 0x6F, 0x75, 0x6E, 0x74, 0x69, 0x6E, 0x67, 0x20, 0x47, 0x61, 0x6D, 0x65, 0x21}; //Counting Game!
-    char msg_array3[12] = {0x50, 0x72, 0x65, 0x73, 0x73, 0x20, 0x73, 0x77, 0x31, 0x20, 0x74, 0x6F}; //Press sw1 to
-    char msg_array4[17] = {0x73, 0x65, 0x65, 0x20, 0x74, 0x68, 0x65, 0x20, 0x67, 0x61, 0x6D, 0x65, 0x20, 0x6C, 0x69, 0x73, 0x74};//see game list
-    char msg_array5[16] = {0x31, 0x2E, 0x20, 0x6D, 0x65, 0x6D, 0x6F, 0x72, 0x79, 0x20, 0x32, 0x2E, 0x20, 0x39, 0x78, 0x39};//1. memory 2. 9x9
-    char msg_array6[17] = {0x33, 0x2E, 0x20, 0x31, 0x39, 0x78, 0x31, 0x39, 0x20, 0x34, 0x2E, 0x20, 0x70, 0x72, 0x69, 0x6D, 0x65};//3. 19x19 4. prime
+    char nothing[8] = {0x6E, 0x6F, 0x74, 0x68, 0x69, 0x6E, 0x67}; //nothing
+
+    char msg_array1[11] = {0x57, 0x65, 0x6C, 0x63, 0x6F, 0x6D, 0x65, 0x20, 0x74, 0x6F}; //Welcome to
+    char msg_array2[15] = {0x43, 0x6F, 0x75, 0x6E, 0x74, 0x69, 0x6E, 0x67, 0x20, 0x47, 0x61, 0x6D, 0x65, 0x21}; //Counting Game!
+    char msg_array3[13] = {0x50, 0x72, 0x65, 0x73, 0x73, 0x20, 0x73, 0x77, 0x31, 0x20, 0x74, 0x6F}; //Press sw1 to
+    char msg_array4[18] = {0x73, 0x65, 0x65, 0x20, 0x67, 0x61, 0x6D, 0x65, 0x20, 0x6C, 0x69, 0x73, 0x74};//see game list
+    char msg_array5[17] = {0x31, 0x2E, 0x6D, 0x65, 0x6D, 0x6F, 0x72, 0x79, 0x20, 0x32, 0x2E, 0x39, 0x78, 0x39};//1.memory 2.9x9
+    char msg_array6[18] = {0x33, 0x2E, 0x31, 0x39, 0x78, 0x31, 0x39, 0x20, 0x34, 0x2E, 0x70, 0x72, 0x69, 0x6D, 0x65};//3.19x19 4.prime
+    char msg_array7[11] = {0x44, 0x72, 0x69, 0x76, 0x65, 0x20, 0x6D, 0x6F, 0x64, 0x65}; //Drive mode
+
+    char game1[10] = {0x31, 0x2E, 0x20, 0x6D, 0x65, 0x6D, 0x6F, 0x72, 0x79}; //1. memory
+    char game2[7] = {0x32, 0x2E, 0x20, 0x39, 0x78, 0x39}; //2. 9x9
+    char game3[9] = {0x33, 0x2E, 0x20, 0x31, 0x39, 0x78, 0x31, 0x39}; //3. 19x19
+    char game4[9] = {0x34, 0x2E, 0x20, 0x70, 0x72, 0x69, 0x6D, 0x65}; //4. prime
 
 
     lcdinit();        /* Initialize LCD1602A module*/
@@ -326,14 +344,13 @@ int main(void)
 		delay_us(80000);
 		i++;
 	}
+	delay_us(2000000);
 
-    //Lcd off, LCD display clear
+	lcdinput(0x01);
 	delay_us(20000);
-	lcdinput(0x08);	//lcd display off
-	delay_us(4000);
-	lcdinput(0x01);	//Clear display
-	delay_us(200000);
-	
+	lcdinput(0x80);
+	delay_us(20000);
+	i=0;
     while(msg_array3[i] != '\0')
     {
 		lcdcharinput(msg_array3[i]); // 3(third) row text-char send to LCD module
@@ -350,55 +367,265 @@ int main(void)
 		delay_us(80000);
 		i++;
 	}
-		
-	
-	if (PTB->PDIR & (1 << 9))
-	{
-	    page = page +1;
+
+
+	NVIC_init_IRQs(); /*Interrupt Pending, Endable, Priority Set*/
+
+	page = 0;
+	num = 0;
+	int select_game = 0;
+
+	while(1) {
+		//page = num;
+
+		if (page == 1)
+		{
+            convertAdcChan(13);
+			while(adc_complete()==0){}
+			select_game = read_adc_chx;
+
+			if (select_game >= 4000) {
+				lcdinput(0x01);
+				delay_us(20000);
+				lcdinput(0x80);
+				delay_us(20000);
+
+                i = 0;
+                while(game1[i] != '\0')
+			    {
+				    lcdcharinput(game1[i]);// 5(fifth) row text-char send to LCD module
+				    delay_us(80000);
+				    i++;
+			    }
+			}
+			else if (select_game >= 3000) {
+                lcdinput(0x01);
+				delay_us(20000);
+				lcdinput(0x80);
+				delay_us(20000);
+
+                i = 0;
+                while(game2[i] != '\0')
+			    {
+				    lcdcharinput(game2[i]);// 5(fifth) row text-char send to LCD module
+				    delay_us(80000);
+				    i++;
+			    }
+			}
+			else if (select_game >= 2000) {
+                lcdinput(0x01);
+				delay_us(20000);
+				lcdinput(0x80);
+				delay_us(20000);
+
+                i = 0;
+                while(game3[i] != '\0')
+			    {
+				    lcdcharinput(game3[i]);// 5(fifth) row text-char send to LCD module
+				    delay_us(80000);
+				    i++;
+			    }
+			}
+			else if (select_game >= 1000) {
+                lcdinput(0x01);
+				delay_us(20000);
+				lcdinput(0x80);
+				delay_us(20000);
+
+                i = 0;
+                while(game4[i] != '\0')
+			    {
+				    lcdcharinput(game4[i]);// 5(fifth) row text-char send to LCD module
+				    delay_us(80000);
+				    i++;
+			    }
+			}   
+			else {
+                lcdinput(0x01);
+			    delay_us(20000);
+			    lcdinput(0x80);
+			    delay_us(20000);
+
+			    i = 0;
+			    while(msg_array5[i] != '\0')
+			    {
+				    lcdcharinput(msg_array5[i]);// 5(fifth) row text-char send to LCD module
+				    delay_us(80000);
+				    i++;
+			    }
+
+			    lcdinput(0x80+0x40);
+			    delay_us(20000);
+
+			    i = 0;
+			    while(msg_array6[i] != '\0')
+			    {
+				    lcdcharinput(msg_array6[i]);// 5(fifth) row text-char send to LCD module
+				    delay_us(80000);
+				    i++;
+			    }
+			}
+        /*
+			lcdinput(0x01);
+			delay_us(20000);
+			lcdinput(0x80);
+			delay_us(20000);
+
+			i=0;
+			while(msg_array5[i] != '\0')
+			{
+				lcdcharinput(msg_array5[i]);// 5(fifth) row text-char send to LCD module
+				delay_us(80000);
+				i++;
+			}
+
+			lcdinput(0x80+0x40);
+			delay_us(20000);
+
+			i=0;
+			while(msg_array6[i] != '\0')
+			{
+				lcdcharinput(msg_array6[i]);// 5(fifth) row text-char send to LCD module
+				delay_us(80000);
+				i++;
+			}
+			
+            for(;;) 
+            {
+                if(page != 1) 
+                {
+                    break;
+                }
+                else 
+                {
+                    convertAdcChan(13);
+			        while(adc_complete()==0){}
+			        select_mode = read_adc_chx;
+
+			        if (select_mode >= 4000) {
+				        lcdinput(0x01);
+				        delay_us(20000);
+				        lcdinput(0x80);
+				        delay_us(20000);
+
+                        i = 0;
+                        while(game1[i] != '\0')
+			            {
+				            lcdcharinput(game1[i]);// 5(fifth) row text-char send to LCD module
+				            delay_us(80000);
+				            i++;
+			            }
+			        }
+			        else if (select_mode >= 3000) {
+                        lcdinput(0x01);
+				        delay_us(20000);
+				        lcdinput(0x80);
+				        delay_us(20000);
+
+                        i = 0;
+                        while(game2[i] != '\0')
+			            {
+				            lcdcharinput(game2[i]);// 5(fifth) row text-char send to LCD module
+				            delay_us(80000);
+				            i++;
+			            }
+			        }
+			        else if (select_mode >= 2000) {
+                        lcdinput(0x01);
+				        delay_us(20000);
+				        lcdinput(0x80);
+				        delay_us(20000);
+
+                        i = 0;
+                        while(game3[i] != '\0')
+			            {
+				            lcdcharinput(game3[i]);// 5(fifth) row text-char send to LCD module
+				            delay_us(80000);
+				            i++;
+			            }
+			        }
+			        else if (select_mode >= 1000) {
+                        lcdinput(0x01);
+				        delay_us(20000);
+				        lcdinput(0x80);
+				        delay_us(20000);
+
+                        i = 0;
+                        while(game4[i] != '\0')
+			            {
+				            lcdcharinput(game4[i]);// 5(fifth) row text-char send to LCD module
+				            delay_us(80000);
+				            i++;
+			            }
+			        }   
+			        else {
+                        lcdinput(0x01);
+			            delay_us(20000);
+			            lcdinput(0x80);
+			            delay_us(20000);
+
+			            i=0;
+			            while(msg_array5[i] != '\0')
+			            {
+				            lcdcharinput(msg_array5[i]);// 5(fifth) row text-char send to LCD module
+				            delay_us(80000);
+				            i++;
+			            }
+
+			            lcdinput(0x80+0x40);
+			            delay_us(20000);
+
+			            i=0;
+			            while(msg_array6[i] != '\0')
+			            {
+				            lcdcharinput(msg_array6[i]);// 5(fifth) row text-char send to LCD module
+				            delay_us(80000);
+				            i++;
+			            }
+			        }
+                }
+            }*/
+		}
+
+
+		else if(page == 2)
+		{
+            convertAdcChan(13);
+			while(adc_complete()==0){}
+			select_game = read_adc_chx;
+
+            if (select_game >= 1000) {
+                lcdinput(0x01);
+                delay_us(20000);
+                lcdinput(0x80);
+                delay_us(20000);
+
+                i=0;
+                while(nothing[i] != '\0')
+                {
+                    lcdcharinput(nothing[i]);
+                    delay_us(80000);
+                    i++;
+                }
+
+            }
+            else {
+                lcdinput(0x01);
+                delay_us(20000);
+                lcdinput(0x80);
+                delay_us(20000);
+
+                i=0;
+                while(msg_array7[i] != '\0')
+                {
+                    lcdcharinput(msg_array7[i]);// 5(sixth) row text-char send to LCD module
+                    delay_us(80000);
+                    i++;
+                }
+            }	
+		}
 	}
 
-	else if (PTB->PDIR & (1 << 10))
-	{
-	    page = page -1;
-	}
-	
-    //의도가 애매
-	if (page == 1)
-	{
-        delay_us(20000);
-	    lcdinput(0x08);	//lcd display off
-	    delay_us(4000);
-	    lcdinput(0x01);	//Clear display
-	    delay_us(20000); 
-
-	    while(msg_array5[i] != '\0')
-        {
-		    lcdcharinput(msg_array5[i]);// 5(fifth) row text-char send to LCD module
-		    delay_us(80000);
-		    i++;
-	    }
-    }
-
-
-	else if(page == 2)
-	{
-        delay_us(20000);
-	    lcdinput(0x08);	//lcd display off
-	    delay_us(4000);
-	    lcdinput(0x01);	//Clear display
-	    delay_us(20000);
-
-	    while(msg_array6[i] != '\0')
-        {
-		    lcdcharinput(msg_array6[i]);// 5(sixth) row text-char send to LCD module
-		    delay_us(80000);
-		    i++;
-	    }
-    }
-
-	//반복문 추가해야할듯
-
-	//여기까지
 
 /*
 게임에 대한 구상 :
@@ -419,7 +646,7 @@ int main(void)
     소수 찾기인가? 이거에 대한 게임이 어떤 것인지 파악이 잘 안된다. 점차 수정할 것.
 
 */
-
+/*
     num = 0000;
     int key=0, pre_key = 100;
     int output_num = 0;
@@ -431,7 +658,7 @@ int main(void)
 	int cnt = 0;
 
     int rand_arr[500];
-    for (;;) 
+    for (;;)
     {
         if (cnt == 100) {
             break;
@@ -458,10 +685,12 @@ int main(void)
     }
 
     int k = 0;
+*/
 
+/*
     while (1)
     {
-        /*//up-down counter by interrupt
+        //up-down counter by interrupt
     	key=KeyScan();
         if ((key < 10) & !(pre_key == key)) // Key button push
         {
@@ -479,7 +708,7 @@ int main(void)
     		PTB-> PSOR |= 1<<13;
     		seg_out(output_num+1);
 
-    	}*/
+    	}
 
 
     	for (int m = 0; m < 10; m++){
@@ -495,6 +724,7 @@ int main(void)
 	delay_us(4000);
 	lcdinput(0x01);	//Clear display
 	delay_us(2000);
+*/
 
     return 0;
 }
