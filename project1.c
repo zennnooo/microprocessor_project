@@ -296,10 +296,15 @@ int main(void)
     SystemCoreClockUpdate();
     delay_us(20000);
 
-    char msg_array1[15] = {0x55, 0x50, 0x2D, 0x44, 0x4F, 0x57, 0x4E, 0x20, 0x43, 0x4F, 0x55, 0x4E, 0x54, 0x45, 0x52};
-    //UP-DOWN COUNTER
-    char msg_array2[16] = {0x53, 0x57, 0x34, 0x2D, 0x55, 0x50, 0x2C, 0x20, 0x53, 0x57, 0x35, 0x2D, 0x44, 0x4F, 0x57, 0x4E};
-    //SW5-UP, SW4-DOWN
+    //여기부터
+    int page =0;
+    char msg_array1[] = {0x57, 0x65, 0x6C, 0x63, 0x6F, 0x6D, 0x65, 0x20, 0x74, 0x6F}; //Welcome to
+    char msg_array2[] = {0x43, 0x6F, 0x75, 0x6E, 0x74, 0x69, 0x6E, 0x67, 0x20, 0x47, 0x61, 0x6D, 0x65, 0x21}; //Counting Game!
+    char msg_array3[] = {0x50, 0x72, 0x65, 0x73, 0x73, 0x20, 0x73, 0x77, 0x31, 0x20, 0x74, 0x6F}; //Press sw1 to
+    char msg_array4[] = {0x73, 0x65, 0x65, 0x20, 0x74, 0x68, 0x65, 0x20, 0x67, 0x61, 0x6D, 0x65, 0x20, 0x6C, 0x69, 0x73, 0x74};//see game list
+    char msg_array5[] = {0x31, 0x2E, 0x20, 0x6D, 0x65, 0x6D, 0x6F, 0x72, 0x79, 0x20, 0x32, 0x2E, 0x20, 0x39, 0x78, 0x39};//1. memory 2. 9x9
+    char msg_array6[] = {0x33, 0x2E, 0x20, 0x31, 0x39, 0x78, 0x31, 0x39, 0x20, 0x34, 0x2E, 0x20, 0x70, 0x72, 0x69, 0x6D, 0x65};//3. 19x19 4. prime
+
 
     lcdinit();        /* Initialize LCD1602A module*/
 	delay_us(20000);
@@ -322,11 +327,84 @@ int main(void)
 		i++;
 	}
 
+    //Lcd off, LCD display clear
+	delay_us(20000);
+	lcdinput(0x08);	//lcd display off
+	delay_us(4000);
+	lcdinput(0x01);	//Clear display
+	delay_us(200000);
+	
+    while(msg_array3[i] != '\0')
+    {
+		lcdcharinput(msg_array3[i]); // 3(third) row text-char send to LCD module
+		delay_us(80000);
+		i++;
+	}
+
+	lcdinput(0x80+0x40);// second row
+	delay_us(20000);
+	i=0;
+	while(msg_array4[i] != '\0')
+    {
+		lcdcharinput(msg_array4[i]);// 4(fourth) row text-char send to LCD module
+		delay_us(80000);
+		i++;
+	}
+		
+	
+	if (PTB->PDIR & (1 << 9))
+	{
+	    page = page +1;
+	}
+
+	else if (PTB->PDIR & (1 << 10))
+	{
+	    page = page -1;
+	}
+	
+	if (page ==1)
+	{
+        delay_us(20000);
+	    lcdinput(0x08);	//lcd display off
+	    delay_us(4000);
+	    lcdinput(0x01);	//Clear display
+	    delay_us(20000); 
+
+	    while(msg_array5[i] != '\0')
+        {
+		    lcdcharinput(msg_array5[i]);// 5(fifth) row text-char send to LCD module
+		    delay_us(80000);
+		    i++;
+	    }
+    }
+
+
+	else if(page ==2)
+	{
+        delay_us(20000);
+	    lcdinput(0x08);	//lcd display off
+	    delay_us(4000);
+	    lcdinput(0x01);	//Clear display
+	    delay_us(20000);
+
+	    while(msg_array6[i] != '\0')
+        {
+		    lcdcharinput(msg_array6[i]);// 5(sixth) row text-char send to LCD module
+		    delay_us(80000);
+		    i++;
+	    }
+    }
+
+	//반복문 추가해야할듯
+
+	//여기까지
+
     num = 0000;
     int key=0, pre_key = 100;
     int output_num = 0;
 
     //중복이 제거된 random key
+	//난이도 조절을 위해선 crand의 범위 조절하기
 	int rand_key = 0;
 	int pre_rand = 100;
 	int cnt = 0;
