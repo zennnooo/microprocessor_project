@@ -10,6 +10,13 @@ math.h
 
 #test code
 project.c
+up_down_counterdd.c
+no_duplicated_randarr.c
+about_keypad.c
+page_select.c
+game_test
+
+
 
 #1. random
 random_test.c
