@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
-//void game1(void);
+void game1(void);
 void game2(void);
 void game4(void);
 
@@ -19,7 +20,7 @@ int crand(int min, int max)
 // 소수 판별
 int isPrime(int num) {
     if (num <= 1) {
-        return 0;  // 0 and 1 are not prime
+        return 2;  // 0 and 1 are not prime
     }
     for (int i = 2; i * i <= num; ++i) {
         if (num % i == 0) {
@@ -126,9 +127,9 @@ int main(void)
                     printf("press sw1(대체 숫자 8) to start game : ");
                     scanf("%d", &press);
 
-                    /*if (press == 8) {
-                        //game1();
-                    }*/
+                    if (press == 8) {
+                        game1();
+                    }
                 }
                 else if (select_game >= 3000)
                 {
@@ -182,7 +183,8 @@ int main(void)
                     scanf("%d", &press);
 
                     if (press == 8) {
-                        while (1) {
+                        for (int p = 1; p <= 10; p++) {
+                            printf("problem %d : ", p);
                             game4();
                         }
                     }
@@ -197,6 +199,77 @@ int main(void)
 
     return 0;
 }
+void game1(void) {
+    int numbers[10];
+    char prompt[25] = {0x4D, 0x65, 0x6D, 0x6F, 0x72, 0x69, 0x7A, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20}; // "Memory: "
+    char correct[10] = {0x43, 0x6F, 0x72, 0x72, 0x65, 0x63, 0x74, 0x21}; // "Correct!"
+    char tryAgainMsg[12] = {0x54, 0x72, 0x79, 0x20, 0x61, 0x67, 0x61, 0x69, 0x6E, 0x21}; // "Try again!"
+
+    // 랜덤한 10개의 숫자 선택
+    //srand(time(NULL)); // 난수 시드 초기화
+    for (int i = 0; i < 10; i++) {
+        numbers[i] = crand(0, 9); // 0부터 9까지의 난수
+    }
+
+    // 숫자를 일정 간격으로 출력
+    printf("problem : ");
+    for (int i = 0; i < 10; i++) {
+        printf("%d ", numbers[i]);
+    }
+    printf("\n");
+
+    // 사용자 입력 받기
+    int key = 0, preKey = 100;
+
+    i = 0;
+    while (prompt[i] != '\0') {
+        printf("%c", prompt[i]);
+        i++;
+    }
+    printf("\n");
+
+    int userAnswer[10];
+
+    // 사용자 입력 받기
+    int cnt = 0;
+    printf("input answer : \n");
+    while (1) {
+        scanf("%d", &key);
+        userAnswer[cnt++] = key;
+
+        if (cnt == 10) break;
+    }
+
+    for (int i = 0; i < 10; i++) {
+        printf("%d ", userAnswer[i]);
+    }
+    printf("\n");
+
+    // 정답 체크 및 출력
+    int a = 0;
+    while(1) {
+        if (userAnswer[a] != numbers[a]) {
+            i = 0;
+            while (tryAgainMsg[i] != '\0') {
+                printf("%c", tryAgainMsg[i]);
+                i++;
+            }
+            printf("\n");
+            break;
+        } 
+        a++;
+        if (a == 10) {
+            i = 0;
+            while (correct[i] != '\0') {
+                printf("%c", correct[i]);
+                i++;
+            }
+            printf("\n");
+            break;
+        }
+    }
+}
+
 
 void game2(void) 
 {
@@ -219,12 +292,20 @@ void game2(void)
             break;
         }
 
+        //test
+        //printf("init key : %d\n", key);
+        //printf("init outputnum : %d\n", output_num);
+
         //seg_out자리
         printf("%d * %d\n", num1, num2);
         // 플레이어에게 답 입력 받기
         //keyscan대신 scanf
         printf("input answer : ");
-        scanf("%d", &output_num);
+        scanf("%d", &key);
+        output_num = key;
+
+        //printf("after scan key : %d\n", key);
+        //printf("after scan outputnum : %d\n", output_num);
     }
 
     // 정답 체크
@@ -252,9 +333,9 @@ void game2(void)
 void game4(void) {
     int randomNumber;
     char YESMessage[20] = {0x31, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x59, 0x45, 0x53};
-    char NoMessage[20] = {0x30, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x4e, 0x4f, 0x00};
-    char congratulations[16] = {0x43, 0x6f, 0x6e, 0x67, 0x72, 0x61, 0x74, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x21};
-    char incorrect[9] = {0x69, 0x6e, 0x63, 0x6f, 0x72, 0x72, 0x65, 0x63, 0x74};
+    char NoMessage[20] = {0x32, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x4e, 0x4f, 0x00};
+    char congratulations[17] = {0x43, 0x6f, 0x6e, 0x67, 0x72, 0x61, 0x74, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x21};
+    char incorrect[10] = {0x69, 0x6e, 0x63, 0x6f, 0x72, 0x72, 0x65, 0x63, 0x74};
 
     i=0;
     while (YESMessage[i] != '\0') {
@@ -270,7 +351,8 @@ void game4(void) {
     }
     printf("\n");
 
-    randomNumber = crand(2, 100);  // Generate a random number between 2 and 99
+    //srand(time(NULL));
+    randomNumber = crand(0, 99);  // Generate a random number between 2 and 99
 
     int key = 0;//, pre_key = 100;
     int output_num = 0;
@@ -280,13 +362,12 @@ void game4(void) {
             break;
         }
 
-        printf("%d", randomNumber); //segout randomnumber
+        printf("%d\n", randomNumber); //segout randomnumber
+        printf("isPrime answer : %d\n", isPrime(randomNumber));
+        printf("input answer : ");
         scanf("%d", &key); //keyscan
 
         output_num = key;
-        if (output_num == isPrime(randomNumber)) {
-            break;
-        }
     }
 
     if (output_num == isPrime(randomNumber)) {
