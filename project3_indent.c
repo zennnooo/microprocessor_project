@@ -986,10 +986,6 @@ int main(void) {
             }
         }
     }
-
-    num = 0000;
-    int key = 0, pre_key = 100;
-    int output_num = 0;
-
+    
     return 0;
 }

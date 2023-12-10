@@ -146,10 +146,7 @@ int main(void)
 
 
                     if (press == 8) {
-                        for (int p = 1; p <= 10; p++) {
-                            printf("problem %d : ", p);
-                            game2();
-                        }
+                        game2();
                     }
                 }
                 else if (select_game >= 2000)
@@ -311,7 +308,6 @@ void game2(void)
     // 정답 체크
     if (output_num == answer)
     {
-
         i = 0;
         while (congratulations[i] != '\0') {
             printf("%c", congratulations[i]);
