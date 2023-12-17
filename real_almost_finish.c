@@ -596,8 +596,6 @@ void game1(void)
                     i++;
                 }
 
-                lcdinput(0x01);
-                delay_us(20000);
                 lcdinput(0x80 + 0x40);
                 delay_us(20000);
 
