@@ -27,6 +27,9 @@ unsigned int press = 0; //인터럽트를 총해 game start 인식
 //lcd
 unsigned int i = 0;
 
+//led
+unsigned int led_data[8] = {0x1, 0x2, 0x4, 0x8, 0x4000, 0x8000, 0x10000, 0x20000};
+
 
 void PORT_init(void)
 {
@@ -583,7 +586,25 @@ void off_LED(int ledNumber) {
     PTA->PSOR = 1 << ledNumber; // Turn on the specified LED
 }
 
+
 void game3(void) {
+    int led_arr[10][3]
+    for (int l = 0; l < 10; l++) {
+        int n1 = crand(0, 7);
+    int n2, n3;
+
+    do {
+        n2 = crand(0, 7);
+    } while (n2 == n1);
+
+    do {
+        n3 = crand(0, 7);
+    } while (n3 == n1 || n3 == n2); // 중복 제거
+        for (int a = 0; a < 3; a++) {
+
+        }
+    }
+
     int n1 = crand(0, 7);
     int n2, n3;
 
@@ -598,15 +619,32 @@ void game3(void) {
     display_LED(n1);
     display_LED(n2);
     display_LED(n3);
+    delay_us(500000);
 
     int key = 0, pre_key = 100;
     int output_num;
     int output_digits[3];
 
+   /* seg_out(output_num);
+            output_digits[0] = output_num / 100;
+            output_digits[1] = (output_num %100) / 10;
+            output_digits[2] = output_num % 10 ;*/
+
     while (1) {
-        output_digits[0] = output_num / 100;
-        output_digits[1] = (output_num %100) / 10;
-        output_digits[2] = output_num % 10;
+
+
+    	output_digits[0] = output_num / 100;
+    	            output_digits[1] = (output_num %100) / 10;
+    	            output_digits[2] = output_num % 10 ;
+
+    	/*seg_out(n1);
+    	delay_us(500000);
+    	seg_out(n2);
+    	delay_us(500000);
+    	seg_out(n3);
+    	delay_us(500000);*/
+
+    	//output_num % 10;
         if (output_digits[0] == n1 && output_digits[1] == n2 && output_digits[2] == n3)
             break;
         else if (output_digits[0] == n1 && output_digits[1] == n3 && output_digits[2] == n2)
@@ -619,6 +657,9 @@ void game3(void) {
             break;
         else if (output_digits[0] == n3 && output_digits[1] == n2 && output_digits[2] == n1)
             break;
+
+
+
         else {
             key = KeyScan();
             if ((key < 10) & !(pre_key == key)) // Key button push
@@ -628,20 +669,29 @@ void game3(void) {
             }
             pre_key = key;
         }
+    	//seg_out(output_num);
+        seg_out(n1*100 + n2*10 + n3);
+    	//delay_us(500000);
 
-        off_LED(n1);
+        /*off_LED(n1);
         off_LED(n2);
-        off_LED(n3);
+        off_LED(n3);*/
 
-        char congratulations[17] = {0x43, 0x6f, 0x6e, 0x67, 0x72, 0x61, 0x74, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x21};
 
-        int i = 0;
-        while (congratulations[i] != '\0') {
-            lcdcharinput(congratulations[i]);
-            delay_us(80000);
-            i++;
-        }
     }
+    lcdinput(0x01);
+            delay_us(20000);
+            lcdinput(0x80);
+        	delay_us(20000);
+
+            char congratulations[17] = {0x43, 0x6f, 0x6e, 0x67, 0x72, 0x61, 0x74, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x21};
+
+            int i = 0;
+            while (congratulations[i] != '\0') {
+                lcdcharinput(congratulations[i]);
+                delay_us(80000);
+                i++;
+            }
 }
 
 void game4(void) {
