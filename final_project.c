@@ -32,6 +32,39 @@ unsigned int i = 0;
 // unsigned int led_data[8] = {0x1, 0x2, 0x4, 0x8, 0x4000, 0x8000, 0x100000, 0x200000};
 unsigned int led_data[8] = {0, 1, 2, 3, 14, 15, 16, 17};
 
+void FTM_init(void)
+{
+
+    // FTM0 clocking
+    PCC->PCCn[PCC_FTM0_INDEX] &= ~PCC_PCCn_CGC_MASK;  // Ensure clk diabled for config
+    PCC->PCCn[PCC_FTM0_INDEX] |= PCC_PCCn_PCS(0b010)  // Clocksrc=1, 8MHz SIRCDIV1_CLK
+                                 | PCC_PCCn_CGC_MASK; // Enable clock for FTM regs
+
+    // FTM0 Initialization
+    FTM0->SC = FTM_SC_PWMEN2_MASK                     // Enable PWM channel 1output
+               | FTM_SC_PWMEN3_MASK | FTM_SC_PS(0.5); // TOIE(timer overflow Interrupt Ena) = 0 (deafault)
+                                                      // CPWMS(Center aligned PWM Select) =0 (default, up count)
+    /* CLKS (Clock source) = 0 (default, no clock; FTM disabled) 	*/
+    /* PS (Prescaler factor) = 1. Prescaler = 2 					*/
+
+    FTM0->MOD = 8000 - 1; // FTM0 counter final value (used for PWM mode)
+                          //  FTM0 Period = MOD-CNTIN+0x0001~=16000 ctr clks=8ms
+                          // 8Mhz /2 =4MHz
+    FTM0->CNTIN = FTM_CNTIN_INIT(0);
+
+    FTM0->CONTROLS[2].CnSC |= FTM_CnSC_MSB_MASK;
+    FTM0->CONTROLS[2].CnSC |= FTM_CnSC_ELSA_MASK; /* FTM0 ch1: edge-aligned PWM, low true pulses 		*/
+                                                  /* CHIE (Chan Interrupt Ena) = 0 (default) 			*/
+                                                  /* MSB:MSA (chan Mode Select)=0b10, Edge Align PWM		*/
+                                                  /* ELSB:ELSA (chan Edge/Level Select)=0b10, low true 	*/
+
+    FTM0->CONTROLS[3].CnSC |= FTM_CnSC_MSB_MASK;
+    FTM0->CONTROLS[3].CnSC |= FTM_CnSC_ELSA_MASK;
+
+    // start FTM0 counter with clk source = external clock (SOSCDIV1_CLK)
+    FTM0->SC |= FTM_SC_CLKS(3);
+}
+
 void PORT_init(void)
 {
     // 사용할 port에 따라서 각각 선언해주기
@@ -83,6 +116,9 @@ void PORT_init(void)
     PORTD->PCR[13] = PORT_PCR_MUX(1);
     PORTD->PCR[14] = PORT_PCR_MUX(1);
     PORTD->PCR[15] = PORT_PCR_MUX(1);
+
+    PORTD->PCR[0] |= PORT_PCR_MUX(2); /* Port D16: MUX = ALT2, FTM0CH1 */
+    PORTD->PCR[1] |= PORT_PCR_MUX(2); /* Port D16: MUX = ALT2, FTM0CH3 */
 
     // Output set(set 4bit, 2line - 0b 0010 0101 000x xxxx)
 
@@ -308,7 +344,7 @@ void seg_out(int number)
     j = 0;
 }
 
-// seg_out for game2
+// game2 seg_out
 void seg_out_game2(int num1, int num2)
 {
     Dtime = 1000;
@@ -371,7 +407,7 @@ void count_three()
         delay_us(100000);
 
         for (int d = 0; d < 275; d++)
-        {        
+        {
             buzzeroff();
             seg_out(index);
         }
@@ -447,6 +483,30 @@ void off_LED(int ledNumber)
     PTA->PSOR = 1 << ledNumber; // Turn on the specified LED
 }
 
+void motor_on(void)
+{
+    int D = 0;
+    D = 4000;
+
+    /* Combine mode and dead-time enable for channel2 and channel3 */
+    FTM0->COMBINE |= FTM_COMBINE_SYNCEN1_MASK | FTM_COMBINE_COMP1_MASK | FTM_COMBINE_DTEN1_MASK;
+
+    FTM0->CONTROLS[2].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+    FTM0->CONTROLS[3].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+}
+
+void motor_off(void)
+{
+    int D = 0;
+    D = 0000;
+
+    /* Combine mode and dead-time enable for channel2 and channel3 */
+    FTM0->COMBINE |= FTM_COMBINE_SYNCEN1_MASK | FTM_COMBINE_COMP1_MASK | FTM_COMBINE_DTEN1_MASK;
+
+    FTM0->CONTROLS[2].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+    FTM0->CONTROLS[3].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+}
+
 void game1(void)
 {
     // 랜덤한 10개의 숫자 선택
@@ -479,7 +539,7 @@ void game1(void)
             i++;
         }
 
-        count_three(); //3, 3, 1 count 출력
+        count_three(); // 3, 3, 1 count 출력
 
         lcdinput(0x01);
         delay_us(20000);
@@ -495,6 +555,7 @@ void game1(void)
         }
         delay_us(80000);
 
+        motor_on();
         cnt = 0;
         for (;;)
         {
@@ -594,6 +655,8 @@ void game1(void)
                 break;
         }
 
+        motor_off();
+
         for (int i = 0; i < q; i++)
         {
             for (int n = 0; n < 200; n++)
@@ -618,7 +681,7 @@ void game1(void)
                 while (correct[i] != '\0')
                 {
                     lcdcharinput(correct[i]); // Correct!
-                    delay_us(800`00);
+                    delay_us(80000);
                     i++;
                 }
 
@@ -629,7 +692,7 @@ void game1(void)
 
                 while (next_stage[i] != '\0')
                 {
-                    lcdcharinput(next_stage[i]); //next stage
+                    lcdcharinput(next_stage[i]); // next stage
                     delay_us(80000);
                     i++;
                 }
@@ -707,7 +770,7 @@ void game2(void)
         i++;
     }
 
-    count_three(); //3, 3, 1 count 출력
+    count_three(); // 3, 3, 1 count 출력
 
     lcdinput(0x01);
     delay_us(20000);
@@ -835,7 +898,7 @@ void game3(void)
 
         while (wam[i] != '\0')
         {
-            lcdcharinput(wam[i]); // 
+            lcdcharinput(wam[i]); //
             delay_us(80000);
             i++;
         }
@@ -960,7 +1023,7 @@ void game4(void)
         i++;
     }
 
-    count_three(); //3, 3, 1 count 출력
+    count_three(); // 3, 3, 1 count 출력
 
     lcdinput(0x01);
     delay_us(20000);
@@ -1068,9 +1131,12 @@ int main(void)
     NormalRUNmode_80MHz(); /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
     SystemCoreClockUpdate();
     ADC_init();
-    delay_us(20000);
+    FTM_init();
 
-    //blink led three times
+    delay_us(20000);
+    motor_off();
+
+    // blink led three times
     led_all_off(); // off
     delay_us(80000);
     led_all_on(); // on
@@ -1093,19 +1159,11 @@ int main(void)
     delay_us(100000);
     buzzeroff();
 
-    /*for (int b = 0; b < 5000; b++)
-    {
-        buzzeron();
-    }
-
-    delay_us(100000);
-    buzzeroff();*/ //필요없는 코드 같음. 정상 작동시 삭제할 것
-
     char nothing[8] = {0x6E, 0x6F, 0x74, 0x68, 0x69, 0x6E, 0x67}; // nothing
 
     char msg_array1[11] = {0x57, 0x65, 0x6C, 0x63, 0x6F, 0x6D, 0x65, 0x20, 0x74, 0x6F};                                     // Welcome to
     char msg_array2[15] = {0x43, 0x6F, 0x75, 0x6E, 0x74, 0x69, 0x6E, 0x67, 0x20, 0x47, 0x61, 0x6D, 0x65, 0x21};             // Counting Game!
-    char msg_array3[13] = {0x50, 0x72, 0x65, 0x73, 0x73, 0x20, 0x73, 0x77, 0x33, 0x20, 0x74, 0x6F};                         // Press sw3 to
+    char msg_array3[13] = {0x50, 0x72, 0x65, 0x73, 0x73, 0x20, 0x73, 0x77, 0x31, 0x20, 0x74, 0x6F};                         // Press sw3 to
     char msg_array4[18] = {0x73, 0x65, 0x65, 0x20, 0x67, 0x61, 0x6D, 0x65, 0x20, 0x6C, 0x69, 0x73, 0x74};                   // see game list
     char msg_array5[17] = {0x31, 0x2E, 0x6D, 0x65, 0x6D, 0x6F, 0x72, 0x79, 0x20, 0x32, 0x2E, 0x39, 0x78, 0x39};             // 1.memory 2.9x9
     char msg_array6[21] = {0x33, 0x2E, 0x57, 0x41, 0x4D, 0x20, 0x20, 0x20, 0x20, 0x34, 0x2E, 0x70, 0x72, 0x69, 0x6D, 0x65}; // 3.WAM 4.prime
@@ -1205,7 +1263,7 @@ int main(void)
             }
 
             count_five();
-            page = 0; 
+            page = 0;
 
             int game_num = 0;
             while (page == 0)
@@ -1276,7 +1334,7 @@ int main(void)
                     }
                 }
 
-                if (select_game >= 4000) //game4
+                if (select_game >= 4000) // game4
                 {
 
                     lcdinput(0x01);
@@ -1329,7 +1387,7 @@ int main(void)
                     }
 
                     while (1)
-                    { 
+                    {
                         if (press == 8)
                         {
                             game4();
@@ -1342,7 +1400,7 @@ int main(void)
                         }
                     }
                 }
-                else if (select_game >= 3000) //game3
+                else if (select_game >= 3000) // game3
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1407,7 +1465,7 @@ int main(void)
                         }
                     }
                 }
-                else if (select_game >= 2000) //game2
+                else if (select_game >= 2000) // game2
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1459,7 +1517,7 @@ int main(void)
                     }
 
                     while (1)
-                    { 
+                    {
                         if (press == 8)
                         {
                             game2();
@@ -1472,7 +1530,7 @@ int main(void)
                         }
                     }
                 }
-                else if (select_game >= 1000) //game1
+                else if (select_game >= 1000) // game1
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1524,7 +1582,7 @@ int main(void)
                     }
 
                     while (1)
-                    { 
+                    {
                         if (press == 8)
                         {
                             game1();
@@ -1537,7 +1595,7 @@ int main(void)
                         }
                     }
                 }
-                else //not game
+                else // not game
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1547,7 +1605,7 @@ int main(void)
                     i = 0;
                     while (nothing[i] != '\0')
                     {
-                        lcdcharinput(nothing[i]); //nothing
+                        lcdcharinput(nothing[i]); // nothing
                         delay_us(80000);
                         i++;
                     }
@@ -1557,7 +1615,7 @@ int main(void)
                     i = 0;
                     while (game_return[i] != '\0')
                     {
-                        lcdcharinput(game_return[i]); //return list
+                        lcdcharinput(game_return[i]); // return list
                         delay_us(80000);
                         i++;
                     }
