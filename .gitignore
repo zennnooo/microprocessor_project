@@ -21,7 +21,18 @@ almost_finish.c
 
 duple
 
+timerinterrupt.c
+real_almost_finish.c
+project.c
+project1.c
+project2.c
+project3_indent.c
+
+
+
 
 #1. random
 random_test.c
 rand
+
+trash/

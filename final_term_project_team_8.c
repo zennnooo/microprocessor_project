@@ -32,6 +32,39 @@ unsigned int i = 0;
 // unsigned int led_data[8] = {0x1, 0x2, 0x4, 0x8, 0x4000, 0x8000, 0x100000, 0x200000};
 unsigned int led_data[8] = {0, 1, 2, 3, 14, 15, 16, 17};
 
+void FTM_init(void)
+{
+
+    // FTM0 clocking
+    PCC->PCCn[PCC_FTM0_INDEX] &= ~PCC_PCCn_CGC_MASK;  // Ensure clk diabled for config
+    PCC->PCCn[PCC_FTM0_INDEX] |= PCC_PCCn_PCS(0b010)  // Clocksrc=1, 8MHz SIRCDIV1_CLK
+                                 | PCC_PCCn_CGC_MASK; // Enable clock for FTM regs
+
+    // FTM0 Initialization
+    FTM0->SC = FTM_SC_PWMEN2_MASK                     // Enable PWM channel 1output
+               | FTM_SC_PWMEN3_MASK | FTM_SC_PS(0.5); // TOIE(timer overflow Interrupt Ena) = 0 (deafault)
+                                                      // CPWMS(Center aligned PWM Select) =0 (default, up count)
+    /* CLKS (Clock source) = 0 (default, no clock; FTM disabled) 	*/
+    /* PS (Prescaler factor) = 1. Prescaler = 2 					*/
+
+    FTM0->MOD = 8000 - 1; // FTM0 counter final value (used for PWM mode)
+                          //  FTM0 Period = MOD-CNTIN+0x0001~=16000 ctr clks=8ms
+                          // 8Mhz /2 =4MHz
+    FTM0->CNTIN = FTM_CNTIN_INIT(0);
+
+    FTM0->CONTROLS[2].CnSC |= FTM_CnSC_MSB_MASK;
+    FTM0->CONTROLS[2].CnSC |= FTM_CnSC_ELSA_MASK; /* FTM0 ch1: edge-aligned PWM, low true pulses 		*/
+                                                  /* CHIE (Chan Interrupt Ena) = 0 (default) 			*/
+                                                  /* MSB:MSA (chan Mode Select)=0b10, Edge Align PWM		*/
+                                                  /* ELSB:ELSA (chan Edge/Level Select)=0b10, low true 	*/
+
+    FTM0->CONTROLS[3].CnSC |= FTM_CnSC_MSB_MASK;
+    FTM0->CONTROLS[3].CnSC |= FTM_CnSC_ELSA_MASK;
+
+    // start FTM0 counter with clk source = external clock (SOSCDIV1_CLK)
+    FTM0->SC |= FTM_SC_CLKS(3);
+}
+
 void PORT_init(void)
 {
     // 사용할 port에 따라서 각각 선언해주기
@@ -83,6 +116,9 @@ void PORT_init(void)
     PORTD->PCR[13] = PORT_PCR_MUX(1);
     PORTD->PCR[14] = PORT_PCR_MUX(1);
     PORTD->PCR[15] = PORT_PCR_MUX(1);
+
+    PORTD->PCR[0] |= PORT_PCR_MUX(2); /* Port D16: MUX = ALT2, FTM0CH1 */
+    PORTD->PCR[1] |= PORT_PCR_MUX(2); /* Port D16: MUX = ALT2, FTM0CH3 */
 
     // Output set(set 4bit, 2line - 0b 0010 0101 000x xxxx)
 
@@ -198,10 +234,6 @@ void PORTB_IRQHandler(void)
     {
         External_PIN = 2;
     }
-    else if ((PORTB->ISFR & (1 << 14)) != 0)
-    {
-        External_PIN = 3;
-    }
 
     // External input Check Behavior Assignment
     switch (External_PIN)
@@ -212,13 +244,7 @@ void PORTB_IRQHandler(void)
         External_PIN = 0;
         break;
     case 2:
-        // num = 2;
-        // page = 2;
         press = 8;
-        External_PIN = 0;
-        break;
-    case 3:
-        stop = 4;
         External_PIN = 0;
         break;
     default:
@@ -227,7 +253,6 @@ void PORTB_IRQHandler(void)
 
     PORTB->PCR[11] |= 0x01000000; // Port Control Register ISF bit '1' set
     PORTB->PCR[12] |= 0x01000000; // Port Control Register ISF bit '1' set
-    // PORTB->PCR[14] |= 0x01000000; // Port Control Register ISF bit '1' set
 }
 
 // keypad
@@ -319,49 +344,6 @@ void seg_out(int number)
     j = 0;
 }
 
-void seg_outX()
-{
-
-    Dtime = 1000;
-
-    /*d1000 = (number/1000)%10;
-    d100 = (number/100)%10;
-    d10 = (number/10)%10;
-    d1 = number%10;*/
-
-    // 1000자리수 출력
-    PTE->PSOR = FND_SEL[j];
-    PTE->PCOR = 0x7f;
-    PTE->PSOR = FND_DATA[10];
-    delay_us(Dtime);
-    PTE->PCOR = 0xfff;
-    j++;
-
-    // 100자리수 출력
-    PTE->PSOR = FND_SEL[j];
-    PTE->PCOR = 0x7f;
-    PTE->PSOR = FND_DATA[10];
-    delay_us(Dtime);
-    PTE->PCOR = 0xfff;
-    j++;
-
-    // 10자리수 출력
-    PTE->PSOR = FND_SEL[j];
-    PTE->PCOR = 0x7f;
-    PTE->PSOR = FND_DATA[10];
-    delay_us(Dtime);
-    PTE->PCOR = 0xfff;
-    j++;
-
-    // 1자리수 출력
-    PTE->PSOR = FND_SEL[j];
-    PTE->PCOR = 0x7f;
-    PTE->PSOR = FND_DATA[10];
-    delay_us(Dtime);
-    PTE->PCOR = 0xfff;
-    j = 0;
-}
-
 // game2 seg_out
 void seg_out_game2(int num1, int num2)
 {
@@ -412,9 +394,121 @@ void buzzeroff(void)
     PTA->PCOR |= 1 << 7;
 }
 
+void count_three()
+{
+    for (int index = 3; index >= 1; index--)
+    {
+
+        for (int b = 0; b < 5000; b++)
+        {
+            buzzeron();
+        }
+
+        delay_us(100000);
+
+        for (int d = 0; d < 275; d++)
+        {
+            buzzeroff();
+            seg_out(index);
+        }
+    }
+}
+
+void count_five()
+{
+    for (int index = 5; index >= 1; index--)
+    {
+        for (int b = 0; b < 5000; b++)
+        {
+            buzzeron();
+        }
+
+        delay_us(100000);
+
+        for (int d = 0; d < 275; d++)
+        {
+            buzzeroff();
+            seg_out(index);
+        }
+    }
+}
+
+void led_all_off(void)
+{
+    PTA->PSOR = 1 << 0;
+    PTA->PSOR = 1 << 1;
+    PTA->PSOR = 1 << 2;
+    PTA->PSOR = 1 << 3;
+    PTA->PSOR = 1 << 14;
+    PTA->PSOR = 1 << 15;
+    PTA->PSOR = 1 << 16;
+    PTA->PSOR = 1 << 17;
+}
+
+void led_all_on(void)
+{
+    PTA->PCOR = 1 << 0;
+    PTA->PCOR = 1 << 1;
+    PTA->PCOR = 1 << 2;
+    PTA->PCOR = 1 << 3;
+    PTA->PCOR = 1 << 14;
+    PTA->PCOR = 1 << 15;
+    PTA->PCOR = 1 << 16;
+    PTA->PCOR = 1 << 17;
+}
+
+int isPrime(int num)
+{
+    if (num <= 1)
+    {
+        return 2; // 0 and 1 are not prime
+    }
+    for (int i = 2; i * i <= num; ++i)
+    {
+        if (num % i == 0)
+        {
+            return 2; // num is divisible by i, so not prime
+        }
+    }
+    return 1; // num is prime
+}
+
+void display_LED(int ledNumber)
+{
+    PTA->PCOR = 1 << ledNumber; // Turn on the specified LED
+}
+
+void off_LED(int ledNumber)
+{
+    PTA->PSOR = 1 << ledNumber; // Turn on the specified LED
+}
+
+void motor_on(void)
+{
+    int D = 0;
+    D = 4000;
+
+    /* Combine mode and dead-time enable for channel2 and channel3 */
+    FTM0->COMBINE |= FTM_COMBINE_SYNCEN1_MASK | FTM_COMBINE_COMP1_MASK | FTM_COMBINE_DTEN1_MASK;
+
+    FTM0->CONTROLS[2].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+    FTM0->CONTROLS[3].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+}
+
+void motor_off(void)
+{
+    int D = 0;
+    D = 0000;
+
+    /* Combine mode and dead-time enable for channel2 and channel3 */
+    FTM0->COMBINE |= FTM_COMBINE_SYNCEN1_MASK | FTM_COMBINE_COMP1_MASK | FTM_COMBINE_DTEN1_MASK;
+
+    FTM0->CONTROLS[2].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+    FTM0->CONTROLS[3].CnV = FTM_CnV_VAL(D); // 8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+}
+
 void game1(void)
 {
-
     // 랜덤한 10개의 숫자 선택
     int numbers[10];
     int rand_key = 0;
@@ -445,7 +539,7 @@ void game1(void)
             i++;
         }
 
-        count_three();
+        count_three(); // 3, 3, 1 count 출력
 
         lcdinput(0x01);
         delay_us(20000);
@@ -461,6 +555,7 @@ void game1(void)
         }
         delay_us(80000);
 
+        motor_on();
         cnt = 0;
         for (;;)
         {
@@ -480,9 +575,9 @@ void game1(void)
         }
         char prompt[25] = {0x4D, 0x65, 0x6D, 0x6F, 0x72, 0x79};                            // "Memory: "
         char correct[10] = {0x43, 0x6F, 0x72, 0x72, 0x65, 0x63, 0x74, 0x21};               // "Correct!"
-        char incorrect[20] = {0x49, 0x6e, 0x43, 0x6F, 0x72, 0x72, 0x65, 0x63, 0x74, 0x21}; // incorrect
+        char incorrect[20] = {0x49, 0x6e, 0x43, 0x6F, 0x72, 0x72, 0x65, 0x63, 0x74, 0x21}; // Incorrect
         char input_answer[20] = {0x49, 0x6e, 0x70, 0x75, 0x74, 0x20, 0x61, 0x6e, 0x73, 0x77, 0x65, 0x72, 0x00};
-        char stage_num[] = {0x73, 0x74, 0x61, 0x67, 0x65, 0x20};
+        char stage_num[8] = {0x73, 0x74, 0x61, 0x67, 0x65, 0x20};
         char number = 0x31 + (q - 5);
 
         lcdinput(0x01);
@@ -493,7 +588,7 @@ void game1(void)
         i = 0;
         while (prompt[i] != '\0')
         {
-            lcdcharinput(prompt[i]);
+            lcdcharinput(prompt[i]); // "Memory: "
             delay_us(80000);
             i++;
         }
@@ -504,7 +599,7 @@ void game1(void)
         i = 0;
         while (stage_num[i] != '\0')
         {
-            lcdcharinput(stage_num[i]); // 4(fourth) row text-char send to LCD module
+            lcdcharinput(stage_num[i]); // stage
             delay_us(80000);
             i++;
         }
@@ -512,18 +607,9 @@ void game1(void)
         lcdcharinput(number);
 
         // 숫자를 일정 간격으로 출력
-
         for (int i = 0; i < q; i++)
         {
-            /*lcdinput(0x01);
-            delay_us(20000);
-            lcdinput(0x80);
-            delay_us(20000);
 
-            lcdcharinput(prompt[i]);*/
-            // memory 게임을 진입할 때 이미 출력하므로 필요없을 것으로 보임
-            // 필요있어도 for문 밖에 있어야할 거 같음.
-            // lcdcharinput(numbers[i] + '0');
             for (int n = 0; n < 200; n++)
             {
                 seg_out(numbers[i]);
@@ -531,46 +617,9 @@ void game1(void)
             // delay_us(800000); //속도 보고 delay 조절
         }
 
-        // lcdinput(0x01); // 화면 지우기
-
         // 사용자 입력 받기
         int key = 0, preKey = 100;
-
-        /*
-            lcdinput(0x80);
-            delay_us(20000);
-            int i = 0;
-            while (prompt[i] != '\0') {
-                lcdcharinput(prompt[i]);
-                delay_us(80000);
-                i++;
-            }
-        */
-
         int userAnswer[10];
-        /*for (int i = 0; i < 10; i++) {
-            lcdcharinput(numbers[i] + '0');
-            delay_us(80000);
-        }
-
-        lcdinput(0x01); // 화면 지우기
-        lcdinput(0x80);
-        delay_us(20000);*/
-
-        /*    // 사용자 입력 받기
-            for (int i = 0; i < 10; i++) {
-                key = KeyScan();
-                if ((key < 10) && !(preKey == key)) // Key button push
-                {
-                    userAnswer = userAnswer * 10 + key; // 사용자 입력 업데이트
-                    userAnswer %= 100;                   // 두 자리만 출력
-                }
-                preKey = key; // 반복 입력 방지를 위한
-                lcdcharinput(key + '0');
-                seg_out(key);
-                userAnswer[i] = key;
-                delay_us(80000);
-            }*/
 
         lcdinput(0x01);
         delay_us(20000);
@@ -606,17 +655,10 @@ void game1(void)
                 break;
         }
 
+        motor_off();
+
         for (int i = 0; i < q; i++)
         {
-            /*lcdinput(0x01);
-            delay_us(20000);
-            lcdinput(0x80);
-            delay_us(20000);
-
-            lcdcharinput(prompt[i]);*/
-            // memory 게임을 진입할 때 이미 출력하므로 필요없을 것으로 보임
-            // 필요있어도 for문 밖에 있어야할 거 같음.
-            // lcdcharinput(numbers[i] + '0');
             for (int n = 0; n < 200; n++)
             {
                 seg_out(userAnswer[i]);
@@ -624,7 +666,7 @@ void game1(void)
             // delay_us(800000); //속도 보고 delay 조절
         }
 
-        // 정답 체크 및 출력
+        // answer check and print
         int a = 0;
         while (1)
         {
@@ -638,13 +680,11 @@ void game1(void)
                 i = 0;
                 while (correct[i] != '\0')
                 {
-                    lcdcharinput(correct[i]);
-                    delay_us(800`00);
+                    lcdcharinput(correct[i]); // Correct!
+                    delay_us(80000);
                     i++;
                 }
 
-                lcdinput(0x01);
-                delay_us(20000);
                 lcdinput(0x80 + 0x40);
                 delay_us(20000);
 
@@ -652,14 +692,14 @@ void game1(void)
 
                 while (next_stage[i] != '\0')
                 {
-                    lcdcharinput(next_stage[i]);
+                    lcdcharinput(next_stage[i]); // next stage
                     delay_us(80000);
                     i++;
                 }
 
                 q++;
                 delay_us(2000000);
-                break; // 게임이 종료되었으니 일정시간 지난 후 홈으로 돌아감
+                break;
             }
             if (userAnswer[a] == numbers[a])
             {
@@ -700,7 +740,7 @@ void game1(void)
     i = 0;
     while (gg[i] != '\0')
     {
-        lcdcharinput(gg[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(gg[i]); // gg
         delay_us(80000);
         i++;
     }
@@ -713,7 +753,6 @@ void game2(void)
     char solve_msg[14] = {0x73, 0x6F, 0x6C, 0x76, 0x65, 0x20, 0x70, 0x72, 0x6F, 0x62, 0x6C, 0x65, 0x6D};
 
     char congratulations[17] = {0x43, 0x6f, 0x6e, 0x67, 0x72, 0x61, 0x74, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x21};
-    char incorrect[10] = {0x69, 0x6e, 0x63, 0x6f, 0x72, 0x72, 0x65, 0x63, 0x74};
 
     char ready[10] = {0x52, 0x65, 0x61, 0x64, 0x79, 0x2E, 0x2E, 0x2E, 0x00};
     char start[10] = {0x53, 0x74, 0x61, 0x72, 0x74, 0x21, 0x00};
@@ -726,12 +765,12 @@ void game2(void)
     int i = 0;
     while (ready[i] != '\0')
     {
-        lcdcharinput(ready[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(ready[i]); // ready
         delay_us(80000);
         i++;
     }
 
-    count_three();
+    count_three(); // 3, 3, 1 count 출력
 
     lcdinput(0x01);
     delay_us(20000);
@@ -741,7 +780,7 @@ void game2(void)
     i = 0;
     while (start[i] != '\0')
     {
-        lcdcharinput(start[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(start[i]); // start
         delay_us(80000);
         i++;
     }
@@ -793,21 +832,6 @@ void game2(void)
                 i++;
             }
         }
-        else
-        {
-            lcdinput(0x01);
-            delay_us(20000);
-            lcdinput(0x80);
-            delay_us(20000);
-
-            i = 0;
-            while (incorrect[i] != '\0')
-            {
-                lcdcharinput(incorrect[i]);
-                delay_us(80000);
-                i++;
-            }
-        }
     }
     lcdinput(0x01);
     delay_us(20000);
@@ -817,37 +841,11 @@ void game2(void)
     i = 0;
     while (gg[i] != '\0')
     {
-        lcdcharinput(gg[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(gg[i]); // gg
         delay_us(80000);
         i++;
     }
     delay_us(1500000);
-}
-
-int isPrime(int num)
-{
-    if (num <= 1)
-    {
-        return 2; // 0 and 1 are not prime
-    }
-    for (int i = 2; i * i <= num; ++i)
-    {
-        if (num % i == 0)
-        {
-            return 2; // num is divisible by i, so not prime
-        }
-    }
-    return 1; // num is prime
-}
-
-void display_LED(int ledNumber)
-{
-    PTA->PCOR = 1 << ledNumber; // Turn on the specified LED
-}
-
-void off_LED(int ledNumber)
-{
-    PTA->PSOR = 1 << ledNumber; // Turn on the specified LED
 }
 
 void game3(void)
@@ -866,7 +864,7 @@ void game3(void)
     int i = 0;
     while (ready[i] != '\0')
     {
-        lcdcharinput(ready[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(ready[i]); // ready
         delay_us(80000);
         i++;
     }
@@ -881,14 +879,12 @@ void game3(void)
     i = 0;
     while (start[i] != '\0')
     {
-        lcdcharinput(start[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(start[i]); // start
         delay_us(80000);
         i++;
     }
 
     delay_us(240000);
-
-    // i=0;
 
     for (int p = 0; p < 10; p++)
     {
@@ -902,7 +898,7 @@ void game3(void)
 
         while (wam[i] != '\0')
         {
-            lcdcharinput(wam[i]); // 1(first) row text-char send to LCD module
+            lcdcharinput(wam[i]); //
             delay_us(80000);
             i++;
         }
@@ -927,19 +923,9 @@ void game3(void)
             n3 = crand(0, 7);
         } while (n3 == n1 || n3 == n2); // 중복 제거
 
-        /*    display_LED(led_data[n1]);
-            display_LED(led_data[n2]);
-            display_LED(led_data[n3]);
-            delay_us(500000);*/
-
         int key = 0, pre_key = 100;
         int output_num;
         int output_digits[3];
-
-        /* seg_out(output_num);
-                 output_digits[0] = output_num / 100;
-                 output_digits[1] = (output_num %100) / 10;
-                 output_digits[2] = output_num % 10 ;*/
 
         while (1)
         {
@@ -948,25 +934,9 @@ void game3(void)
             display_LED(led_data[n2]);
             display_LED(led_data[n3]);
 
-            /*for(int b =0; b < 5000; b++) {
-                    buzzeron();
-                }
-
-                delay_us(100000);
-                buzzeroff();*/
-
-            // delay_us(500000);
-
             output_digits[0] = output_num / 100;
             output_digits[1] = (output_num % 100) / 10;
             output_digits[2] = output_num % 10;
-
-            /*seg_out(n1);
-            delay_us(500000);
-            seg_out(n2);
-            delay_us(500000);
-            seg_out(n3);
-            delay_us(500000);*/
 
             // output_num % 10;
             if (output_digits[0] == n1 + 1 && output_digits[1] == n2 + 1 && output_digits[2] == n3 + 1)
@@ -992,9 +962,6 @@ void game3(void)
                 }
                 pre_key = key;
             }
-            // seg_out(output_num);
-            // seg_out((n1+1)*100 + (n2+1)*10 + n3+1);
-            // delay_us(500000);
         }
 
         output_num = 0;
@@ -1025,7 +992,7 @@ void game3(void)
     i = 0;
     while (gg[i] != '\0')
     {
-        lcdcharinput(gg[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(gg[i]); // gg
         delay_us(80000);
         i++;
     }
@@ -1035,13 +1002,10 @@ void game3(void)
 void game4(void)
 {
     int randomNumber;
+
     char YESMessage[20] = {0x31, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x59, 0x45, 0x53};
     char NoMessage[20] = {0x32, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x4e, 0x4f, 0x00};
     char congratulations[16] = {0x43, 0x6f, 0x6e, 0x67, 0x72, 0x61, 0x74, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x21};
-    char incorrect[9] = {0x69, 0x6e, 0x63, 0x6f, 0x72, 0x72, 0x65, 0x63, 0x74};
-
-    // srand((unsigned int)time(NULL));
-
     char ready[10] = {0x52, 0x65, 0x61, 0x64, 0x79, 0x2E, 0x2E, 0x2E, 0x00};
     char start[10] = {0x53, 0x74, 0x61, 0x72, 0x74, 0x21, 0x00};
     char gg[3] = {0x47, 0x47};
@@ -1050,15 +1014,16 @@ void game4(void)
     delay_us(20000);
     lcdinput(0x80);
     delay_us(20000);
+
     int i = 0;
     while (ready[i] != '\0')
     {
-        lcdcharinput(ready[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(ready[i]); // ready
         delay_us(80000);
         i++;
     }
 
-    count_three();
+    count_three(); // 3, 3, 1 count 출력
 
     lcdinput(0x01);
     delay_us(20000);
@@ -1068,16 +1033,14 @@ void game4(void)
     i = 0;
     while (start[i] != '\0')
     {
-        lcdcharinput(start[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(start[i]); // start
         delay_us(80000);
         i++;
     }
-    delay_us(80000);
-    delay_us(80000);
+    delay_us(160000);
 
     for (int p = 0; p < 10; p++)
     {
-
         lcdinput(0x01);
         delay_us(20000);
         lcdinput(0x80);
@@ -1100,7 +1063,7 @@ void game4(void)
             i++;
         }
 
-        randomNumber = crand(1, 99); // Generate a random number between 2 and 99
+        randomNumber = crand(1, 99); // Generate a random number between 1 and 99
 
         int key = 0, pre_key = 100;
         int output_num = 0;
@@ -1139,21 +1102,6 @@ void game4(void)
                 i++;
             }
         }
-        else
-        {
-            lcdinput(0x01);
-            delay_us(20000);
-            lcdinput(0x80);
-            delay_us(20000);
-
-            i = 0;
-            while (incorrect[i] != '\0')
-            {
-                lcdcharinput(incorrect[i]);
-                delay_us(80000);
-                i++;
-            }
-        }
     }
 
     // endgame
@@ -1165,113 +1113,12 @@ void game4(void)
     i = 0;
     while (gg[i] != '\0')
     {
-        lcdcharinput(gg[i]); // 1(first) row text-char send to LCD module
+        lcdcharinput(gg[i]); // GG
         delay_us(80000);
         i++;
     }
 
     delay_us(1500000);
-}
-
-void count_three()
-{
-    for (int index = 3; index >= 1; index--)
-    {
-        // buzzeron();
-
-        for (int b = 0; b < 5000; b++)
-        {
-            buzzeron();
-        }
-
-        delay_us(100000);
-        // buzzeroff();
-
-        for (int d = 0; d < 275; d++)
-        {
-            // buzzeron();
-            buzzeroff();
-            seg_out(index);
-        }
-        // delay_us(1000);
-        //         buzzeroff();
-    }
-}
-
-int count_three2()
-{
-    for (int index = 3; index >= 1; index--)
-    {
-        // buzzeron();
-
-        for (int b = 0; b < 5000; b++)
-        {
-            buzzeron();
-        }
-
-        delay_us(100000);
-        // buzzeroff();
-
-        for (int d = 0; d < 275; d++)
-        {
-            // buzzeron();
-            buzzeroff();
-            seg_out(index);
-        }
-        // delay_us(1000);
-        //         buzzeroff();
-    }
-
-    return 0;
-}
-
-void count_five()
-{
-    for (int index = 5; index >= 1; index--)
-    {
-
-        // buzzeron();
-
-        for (int b = 0; b < 5000; b++)
-        {
-            buzzeron();
-        }
-
-        delay_us(100000);
-
-        for (int d = 0; d < 275; d++)
-        {
-            // buzzeron();
-            buzzeroff();
-            seg_out(index);
-        }
-        // delay_us(1000);
-        //         buzzeroff();
-    }
-}
-
-int led_all_off(void)
-{
-    PTA->PSOR = 1 << 0;
-    PTA->PSOR = 1 << 1;
-    PTA->PSOR = 1 << 2;
-    PTA->PSOR = 1 << 3;
-    PTA->PSOR = 1 << 14;
-    PTA->PSOR = 1 << 15;
-    PTA->PSOR = 1 << 16;
-    PTA->PSOR = 1 << 17;
-}
-
-int led_all_on(void)
-{
-    PTA->PCOR = 1 << 0;
-    PTA->PCOR = 1 << 1;
-    PTA->PCOR = 1 << 2;
-    PTA->PCOR = 1 << 3;
-    PTA->PCOR = 1 << 14;
-    PTA->PCOR = 1 << 15;
-    PTA->PCOR = 1 << 16;
-    PTA->PCOR = 1 << 17;
 }
 
 // main 함수
@@ -1284,29 +1131,25 @@ int main(void)
     NormalRUNmode_80MHz(); /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
     SystemCoreClockUpdate();
     ADC_init();
+    FTM_init();
+
     delay_us(20000);
+    motor_off();
 
-    led_all_off();
+    // blink led three times
+    led_all_off(); // off
     delay_us(80000);
     led_all_on(); // on
     delay_us(80000);
-    led_all_off();
+    led_all_off(); // off
     delay_us(80000);
     led_all_on(); // on
     delay_us(80000);
-    led_all_off();
+    led_all_off(); // off
     delay_us(80000);
     led_all_on(); // on
     delay_us(80000);
-    led_all_off();
-
-    for (int b = 0; b < 5000; b++)
-    {
-        buzzeron();
-    }
-
-    delay_us(100000);
-    buzzeroff();
+    led_all_off(); // off
 
     for (int b = 0; b < 5000; b++)
     {
@@ -1393,8 +1236,6 @@ int main(void)
 
     while (1)
     {
-        // page = num;
-
         if (page == 1)
         {
             lcdinput(0x01);
@@ -1421,12 +1262,7 @@ int main(void)
                 i++;
             }
 
-            // delay_us(1000000);
-
             count_five();
-
-            // count_three();
-
             page = 0;
 
             int game_num = 0;
@@ -1440,7 +1276,7 @@ int main(void)
                 i = 0;
                 while (game_choose[i] != '\0')
                 {
-                    lcdcharinput(game_choose[i]); // 3(third) row text-char send to LCD module
+                    lcdcharinput(game_choose[i]); // choose game
                     delay_us(80000);
 
                     i++;
@@ -1451,7 +1287,7 @@ int main(void)
                 i = 0;
                 while (in7[i] != '\0')
                 {
-                    lcdcharinput(in7[i]); // 4(fourth) row text-char send to LCD module
+                    lcdcharinput(in7[i]); // in 7 sec
                     delay_us(80000);
                     i++;
                 }
@@ -1498,12 +1334,7 @@ int main(void)
                     }
                 }
 
-                /*convertAdcChan(13);
-                while(adc_complete()==0) {}
-                select_game = read_adc_chx();
-
-                seg_out(select_game);*/
-                if (select_game >= 4000)
+                if (select_game >= 4000) // game4
                 {
 
                     lcdinput(0x01);
@@ -1528,8 +1359,8 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-
                     delay_us(1500000);
+
                     // press sw5 to start game
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1543,7 +1374,8 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-                    // press sw1 to return list
+
+                    // press sw3 to return list
                     lcdinput(0x80 + 0x40);
                     delay_us(20000);
                     i = 0;
@@ -1554,29 +1386,21 @@ int main(void)
                         i++;
                     }
 
-                    // b인터럽트 sw1 press = 8
-                    // PTB14
-
                     while (1)
-                    { // 스위치 눌릴 때 까지 기다리기
-                        // 스위치 눌림 -> 게임구현
+                    {
                         if (press == 8)
                         {
-
                             game4();
-
                             press = 0;
-                            break; // 게임 10판 진행하고 while문 탈출
+                            break;
                         }
                         else if (page == 1)
                         {
-                            // page 바뀌면 탈출?
-                            // 없어도 되려나?
                             break;
                         }
                     }
                 }
-                else if (select_game >= 3000)
+                else if (select_game >= 3000) // game3
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1600,8 +1424,8 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-
                     delay_us(1500000);
+
                     // press sw5 to start game
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1615,6 +1439,7 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
+
                     // press sw1 to return list
                     lcdinput(0x80 + 0x40);
                     delay_us(20000);
@@ -1625,27 +1450,22 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-                    // b인터럽트 sw1 press = 8
-                    // PTB14
 
                     while (1)
-                    { // 스위치 눌릴 때 까지 기다리기
-                        // 스위치 눌림 -> 게임구현
+                    {
                         if (press == 8)
                         {
                             game3();
                             press = 0;
-                            break; // 게임 10판 진행하고 while문 탈출
+                            break;
                         }
                         else if (page == 1)
                         {
-                            // page 바뀌면 탈출?
-                            // 없어도 되려나?
                             break;
                         }
                     }
                 }
-                else if (select_game >= 2000)
+                else if (select_game >= 2000) // game2
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1669,8 +1489,8 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-
                     delay_us(1500000);
+
                     // press sw5 to start game
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1684,6 +1504,7 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
+
                     // press sw1 to return list
                     lcdinput(0x80 + 0x40);
                     delay_us(20000);
@@ -1694,29 +1515,22 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-                    // b인터럽트 sw1 press = 8
-                    // PTB14
 
                     while (1)
-                    { // 스위치 눌릴 때 까지 기다리기
-                        // 스위치 눌림 -> 게임구현
+                    {
                         if (press == 8)
                         {
-
                             game2();
-
                             press = 0;
-                            break; // 게임 10판 진행하고 while문 탈출
+                            break;
                         }
                         else if (page == 1)
                         {
-                            // page 바뀌면 탈출?
-                            // 없어도 되려나?
                             break;
                         }
                     }
                 }
-                else if (select_game >= 1000)
+                else if (select_game >= 1000) // game1
                 {
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1740,8 +1554,8 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-
                     delay_us(1500000);
+
                     // press sw5 to start game
                     lcdinput(0x01);
                     delay_us(20000);
@@ -1755,6 +1569,7 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
+
                     // press sw1 to return list
                     lcdinput(0x80 + 0x40);
                     delay_us(20000);
@@ -1765,29 +1580,23 @@ int main(void)
                         delay_us(80000);
                         i++;
                     }
-                    // b인터럽트 sw1 press = 8
-                    // PTB14
 
                     while (1)
-                    { // 스위치 눌릴 때 까지 기다리기
-                        // 스위치 눌림 -> 게임구현
+                    {
                         if (press == 8)
                         {
                             game1();
                             press = 0;
-                            break; // 게임 10판 진행하고 while문 탈출
+                            break;
                         }
                         else if (page == 1)
                         {
-                            // page 바뀌면 탈출?
-                            // 없어도 되려나?
                             break;
                         }
                     }
                 }
-                else
+                else // not game
                 {
-                    // 일단은 빈칸
                     lcdinput(0x01);
                     delay_us(20000);
                     lcdinput(0x80);
@@ -1796,7 +1605,7 @@ int main(void)
                     i = 0;
                     while (nothing[i] != '\0')
                     {
-                        lcdcharinput(nothing[i]);
+                        lcdcharinput(nothing[i]); // nothing
                         delay_us(80000);
                         i++;
                     }
@@ -1806,52 +1615,20 @@ int main(void)
                     i = 0;
                     while (game_return[i] != '\0')
                     {
-                        lcdcharinput(game_return[i]);
+                        lcdcharinput(game_return[i]); // return list
                         delay_us(80000);
                         i++;
                     }
                     while (1)
-                    { // 스위치 눌릴 때 까지 기다리기
-                      // 스위치 눌림 -> 게임구현
+                    {
                         if (page == 1)
                         {
-                            // page 바뀌면 탈출?
-                            // 없어도 되려나?
                             break;
                         }
                     }
                 }
             }
         }
-
-        /*else if (page == 2) {
-            if (select_game >= 1000) {
-                lcdinput(0x01);
-                delay_us(20000);
-                lcdinput(0x80);
-                delay_us(20000);
-
-                i = 0;
-                while (nothing[i] != '\0') {
-                    lcdcharinput(nothing[i]);
-                    delay_us(80000);
-                    i++;
-                }
-            }
-            else {
-                lcdinput(0x01);
-                delay_us(20000);
-                lcdinput(0x80);
-                delay_us(20000);
-
-                i = 0;
-                while (msg_array7[i] != '\0') {
-                    lcdcharinput(msg_array7[i]);
-                    delay_us(80000);
-                    i++;
-                }
-            }
-        }*/
     }
 
     return 0;
